@@ -1,3 +1,6 @@
+import java.io.*;
+import java.net.*;
+
 /* 
 *  socket to use = 5000 + 26 = 5026
 *  must hand GET and POST requests
@@ -15,12 +18,19 @@ public class proxyd {
 
     public proxyd(String[] args) {
 
-        String port = getPort(args);
+        int port = getPort(args);
 
         System.out.println(port);
     }
 
-    private static String getPort(String[] args) {
+    /**
+    *Takes the arguments passed into the program and returns the port number
+    *@param args an array of strings that are passed into this program
+    *@return the number of the port that was passed in
+    */
+    private static int getPort(String[] args) {
+        
+        int port = 0;
 
         if (args.length != 2) {
             throw new IllegalArgumentException("insufficient arguments");
@@ -30,6 +40,12 @@ public class proxyd {
             throw new IllegalArgumentException("incorrect arguments");
         }
 
-        return args[1];
+        try {
+            port = (int)Integer.valueOf(args[1]);
+        } catch (NumberFormatException e) {
+            throw new NumberFormatException("port must be an integer");
+        }
+
+        return port;
     }
 }
