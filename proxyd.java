@@ -22,21 +22,14 @@ public class proxyd {
 
     private static String getPort(String[] args) {
 
-        Boolean nextStringPort = false;
-        String port = "";
-
-        for (String s: args) {
-            if (nextStringPort) {
-                port = s;
-            }
-            if (s.equals("-port")) {
-                nextStringPort = true;
-            }
+        if (args.length != 2) {
+            throw new IllegalArgumentException("insufficient arguments");
         }
 
-        return port;
+        if (!args[0].trim().equals("-port")) {
+            throw new IllegalArgumentException("incorrect arguments");
+        }
+
+        return args[1];
     }
 }
-
-
-
