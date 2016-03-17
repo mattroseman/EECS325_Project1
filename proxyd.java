@@ -11,16 +11,20 @@ import java.net.*;
 public class proxyd {
 
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         proxyd proxy = new proxyd(args);
     }
 
-    public proxyd(String[] args) {
+    public proxyd(String[] args) throws IOException {
 
         int port = getPort(args);
 
-        System.out.println(port);
+        try {
+            ServerSocket socket = new ServerSocket(port);
+        } catch (IOException e) {
+            throw new IOException("an I/O error occored when creating the socket");
+        }
     }
 
     /**
@@ -44,6 +48,10 @@ public class proxyd {
             port = (int)Integer.valueOf(args[1]);
         } catch (NumberFormatException e) {
             throw new NumberFormatException("port must be an integer");
+        }
+
+        if (port < 0 || port > 65535) {
+            throw new IllegalArgumentException("port must be in the range 0-65535");
         }
 
         return port;
