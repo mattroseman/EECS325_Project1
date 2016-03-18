@@ -18,10 +18,23 @@ public class proxyd {
 
     public proxyd(String[] args) throws IOException {
 
-        int port = getPort(args);
+        int port;
+        ServerSocket socket;
+        Socket clientSocket;
+        InputStream istream;
+        OutputStream ostream;
 
+        port = getPort(args);
+
+        
         try {
-            ServerSocket socket = new ServerSocket(port);
+            // Creates a socket on the specified port number
+            // This socket intercepts the HTTP requests the browser sends out
+            socket = new ServerSocket(port);
+            // this method blocks until the browser makes a connection on this socket
+            clientSocket = socket.accept();
+            istream = clientSocket.getInputStream();
+            ostream = clientSocket.getOutputStream();
         } catch (IOException e) {
             throw new IOException("an I/O error occored when creating the socket");
         }
