@@ -22,7 +22,7 @@ public class ConnectionThread extends Thread {
             String inputLine;
 
             while ((inputLine = reader.readLine()) != null) {
-                System.out.println(inputLine);
+                System.out.println(inputLine):
             }
 
 

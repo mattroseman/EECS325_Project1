@@ -38,7 +38,7 @@ public class proxyd {
 
         while(true) {
             // for every new connection to the socket a new thread is created
-            new ConnectionThread(socket.accept());
+            new ConnectionThread(socket.accept()).start();
             System.out.println("A new connection has been made to port: " + port);
         }
     }
