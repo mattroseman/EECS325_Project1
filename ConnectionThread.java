@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.util.Arrays;
 
 public class ConnectionThread extends Thread {
 
@@ -53,24 +54,53 @@ public class ConnectionThread extends Thread {
         // Reads the first line of the request and pulls out the URL
         if (HTTPReqFirstLine != null) {
 
+            System.out.println(HTTPReqFirstLine);
+
             // pulls out the URL part of HTTP request
             tokens = HTTPReqFirstLine.split("\\s+");
+            System.out.println(Arrays.deepToString(tokens));
             destFullURL = tokens[1];
 
             // splits up the URL and port which has the format URL:port
             tokens = destFullURL.split(":");
-            // get cut off the port part of the URL
-            destFullURL = destFullURL.substring(0, destFullURL.lastIndexOf(tokens[tokens.length -1]) - 1);
+            System.out.println(Arrays.deepToString(tokens));
+
             // get the last element of the split which will be the port
-            destPort = (int)Integer.valueOf(tokens[tokens.length -1]);
+            try {
+                destPort = (int)Integer.valueOf(tokens[tokens.length - 1]);
+
+                // if the Integer.valueOf part throws an exception then that means there is no port and this part will
+                // be skipped
+
+                // get cut off the port part of the URL
+                destFullURL = destFullURL.substring(0, destFullURL.lastIndexOf(tokens[tokens.length -1]) - 1);
+            // if there is no port specified, and tokens[tokens.length -1] isn't a number, use port 80
+            } catch (Exception e) {
+                destPort = 80;
+            }
 
             // splits the URL into the hostname and the rest of the url
             // URL will have the format hostname/restofurl
             tokens = destFullURL.split("/");
-            destHostname = tokens[0];
-            // if there is a relativeURL part to the full URL
-            if (tokens.length > 1) {
-                destRelativeURL = destFullURL.substring(tokens[0].length() - 1);
+
+            System.out.println(Arrays.deepToString(tokens));
+
+            // if the http: part isn't included in the URL
+            if (!tokens[0].equals("http:")) {
+                destHostname = tokens[0];
+
+                // if there is more info after the hostname
+                if (tokens.length > 1) {
+                    destRelativeURL = destFullURL.substring(tokens[0].length() -1);
+                }
+            // otherwise the hostname is the second part
+            } else {
+                destHostname = tokens[1];
+
+                // if there is more info after the hostname
+                if (tokens.length > 2) {
+                    destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[1].length() -1);
+                }
             }
 
             // this includes the port number
@@ -80,9 +110,6 @@ public class ConnectionThread extends Thread {
                 throw new MalformedURLException("Browser tried connecting to a nonexistent URL");
             }
             ip = getDNSLookup(destHostname);
-
-            /* So at this point I'm not sure if I should use another socket and forward the request and then get the response on the same socket,
-            of if I should use the URL.openConnection() built into java and do everything though that*/
         }
     }
 
