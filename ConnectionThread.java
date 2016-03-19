@@ -11,7 +11,10 @@ public class ConnectionThread extends Thread {
     String destRelativeURL = "";
     String destHostname;
     int destPort;
+
+    URL destURL;
     InetAddress ip;
+    URLConnection urlConn;
 
     public ConnectionThread(Socket clientSocket) {
 
@@ -45,18 +48,14 @@ public class ConnectionThread extends Thread {
     *@param HTTPReqFirstLine the first line of the HTTP request containing the destination URL
     *@return modifies the destFullURL, destRelativeURL, destHostname, destPort, and ip variables
     */
-    private void parseDestURL(String HTTPReqFirstLine) throws UnknownHostException {
+    private void parseDestURL(String HTTPReqFirstLine) throws UnknownHostException, MalformedURLException {
 
         // Reads the first line of the request and pulls out the URL
         if (HTTPReqFirstLine != null) {
 
-            System.out.println("test1");
-
             // pulls out the URL part of HTTP request
             tokens = HTTPReqFirstLine.split("\\s+");
             destFullURL = tokens[1];
-
-            System.out.println("test2");
 
             // splits up the URL and port which has the format URL:port
             tokens = destFullURL.split(":");
@@ -64,8 +63,6 @@ public class ConnectionThread extends Thread {
             destFullURL = destFullURL.substring(0, destFullURL.lastIndexOf(tokens[tokens.length -1]) - 1);
             // get the last element of the split which will be the port
             destPort = (int)Integer.valueOf(tokens[tokens.length -1]);
-
-            System.out.println("test3");
 
             // splits the URL into the hostname and the rest of the url
             // URL will have the format hostname/restofurl
@@ -76,14 +73,16 @@ public class ConnectionThread extends Thread {
                 destRelativeURL = destFullURL.substring(tokens[0].length() - 1);
             }
 
-            System.out.println("Full URL: " + destFullURL);
-            System.out.println("Port: " + destPort);
-            System.out.println("Hostname: " + destHostname);
-            System.out.println("Relative URL: " + destRelativeURL);
-
+            // this includes the port number
+            try {
+                destURL = new URL(destFullURL);
+            } catch (MalformedURLException e) {
+                throw new MalformedURLException("Browser tried connecting to a nonexistent URL");
+            }
             ip = getDNSLookup(destHostname);
 
-            System.out.println("IP: " + ip.getHostAddress());
+            /* So at this point I'm not sure if I should use another socket and forward the request and then get the response on the same socket,
+            of if I should use the URL.openConnection() built into java and do everything though that*/
         }
     }
 
