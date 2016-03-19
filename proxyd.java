@@ -20,9 +20,6 @@ public class proxyd {
 
         int port;
         ServerSocket socket;
-        Socket clientSocket;
-        InputStream istream;
-        OutputStream ostream;
 
         port = getPort(args);
 
@@ -32,11 +29,17 @@ public class proxyd {
             // This socket intercepts the HTTP requests the browser sends out
             socket = new ServerSocket(port);
             // this method blocks until the browser makes a connection on this socket
-            clientSocket = socket.accept();
-            istream = clientSocket.getInputStream();
-            ostream = clientSocket.getOutputStream();
+
+            System.out.println("The Socket listener has been set up on port: " + port);
+
         } catch (IOException e) {
-            throw new IOException("an I/O error occored when creating the socket");
+            throw new IOException("an I/O error occured when creating the socket");
+        }
+
+        while(true) {
+            // for every new connection to the socket a new thread is created
+            new ConnectionThread(socket.accept());
+            System.out.println("A new connection has been made to port: " + port);
         }
     }
 
