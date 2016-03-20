@@ -6,11 +6,19 @@ public class ConnectionThread extends Thread {
 
     Socket socket;
 
+    // first line read from the HTTP Request
     String inputLine;
+    // first line read with only the relative URL
+    String shortInputLine;
+    // used multiple times when parsing the first line
     String[] tokens;
+    // the full URL for the destination address
     String destFullURL;
+    // just the relative part of the destination URL
     String destRelativeURL = "";
+    // just the hostname part of the destination URL
     String destHostname;
+    // the port of the destination (default is 80)
     int destPort;
 
     URL destURL;
@@ -51,6 +59,9 @@ public class ConnectionThread extends Thread {
     */
     private void parseDestURL(String HTTPReqFirstLine) throws UnknownHostException, MalformedURLException {
 
+        String requestType;
+        String HTTPVersion;
+
         // Reads the first line of the request and pulls out the URL
         if (HTTPReqFirstLine != null) {
 
@@ -59,7 +70,9 @@ public class ConnectionThread extends Thread {
             // pulls out the URL part of HTTP request
             tokens = HTTPReqFirstLine.split("\\s+");
             System.out.println(Arrays.deepToString(tokens));
+            requestType = tokens[0];
             destFullURL = tokens[1];
+            HTTPVersion = tokens[2];
 
             // splits up the URL and port which has the format URL:port
             tokens = destFullURL.split(":");
@@ -110,6 +123,8 @@ public class ConnectionThread extends Thread {
                 throw new MalformedURLException("Browser tried connecting to a nonexistent URL");
             }
             ip = getDNSLookup(destHostname);
+
+            shortInputLine = requestType + " " + destRelativeURL + " " + HTTPVersion;
         }
     }
 
