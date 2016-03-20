@@ -30,7 +30,9 @@ public class ConnectionThread extends Thread {
     private byte[] buffer = new byte[bufferSize];
     private int bytesRead;
 
-    private boolean containsMsg = false;
+    private boolean contentLengthUsed = false;
+    private boolean transferEncodingUsed = false;
+    private int msgSize;
 
     public ConnectionThread(Socket socket) {
 
@@ -79,6 +81,8 @@ public class ConnectionThread extends Thread {
             System.out.println("Server Socket created");
             serveros = serverSocket.getOutputStream();
             System.out.println("Server Socket output stream created");
+            serveris = serverSocket.getInputStream();
+            System.out.println("Server Socket input stream created");
             serveros.write(shortInputLine.getBytes());
 
             // Runs through all the Header lines
@@ -96,19 +100,32 @@ public class ConnectionThread extends Thread {
             since the browser wants to use persistent connections*/
 
             // Now all thats left is the message which can be passed to the OutputStream directly
-            while ((bytesRead = clientis.read(buffer, 0, bufferSize)) > 0) {
-                System.out.println("bytes read from client message body");
-                serveros.write(buffer, 0, bytesRead);
-                System.out.println("bytes sent to server");
-
-                buffer = new byte[bufferSize]; //clears the buffer so that no duplicate data is sent
+            if (contentLengthUsed) {
+                transferContentLengthMessage();
             }
+
+            serveros.flush();
 
             System.out.println("The client request has finished being sent to the server");
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the proxy-server outputstream" + 
                                " or while reading from client-proxy inputstream");
             System.exit(-1);
+        }
+    }
+
+    /**
+    *When a message body is included in a request and the length is specified with a Content-Length field
+    *this method transfers that message
+    */
+    private void transferContentLengthMessage() throws IOException {
+        while (msgSize > 0) {
+            bytesRead = clientis.read(buffer, 0, bufferSize);
+            if (bytesRead > 0) {
+                serveros.write(buffer, 0, bytesRead);
+            }
+            buffer = new byte[bufferSize];
+            msgSize = msgSize - bytesRead;
         }
     }
 
@@ -124,7 +141,9 @@ public class ConnectionThread extends Thread {
             do {
                 bytesRead = serveris.read(buffer);
                 clientos.write(buffer);
-            } while (bytesRead != -1);
+            } while (bytesRead > 0);
+
+            clientos.flush();
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the server-proxy inputstream" + 
                                " or proxy-client outputstream");
@@ -204,15 +223,25 @@ public class ConnectionThread extends Thread {
     /**
     *This method takes in a header line of an HTTP request and makes any necessary changes
     *Changes made: set Connection and Proxy-connection to "close"
+    *method also checks to see if a Content-Length header is present and if so sets msgSize
     *@param line the input line that the method is currently checking
     *@return returns the new string of any changes made to the line, and if no changes are made returns
     *the original line
     */
-    private static String checkHeaders(String line) {
+    private String checkHeaders(String line) {
 
         // if the line begins with "Connection" or "Proxy-connection" make the property "close"
         if (Pattern.matches("^(Connection:|Proxy-connection:).*", line)) {
             return line.split(":")[0] + ": close";
+        } 
+        else if (Pattern.matches("^Content-Length:.*", line)) {
+            contentLengthUsed = true;
+            tokens = line.split(" ");
+            msgSize = (int)Integer.valueOf(tokens[1]);
+        }
+        else if (Pattern.matches("^TE:.*", line)) {
+            transferEncodingUsed = true;
+            System.out.println("Transfer encoding used, not implemented yet");
         }
 
         return line;
