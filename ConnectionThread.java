@@ -1,29 +1,26 @@
 import java.io.*;
 import java.net.*;
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
 public class ConnectionThread extends Thread {
 
     Socket socket;
 
-    // first line read from the HTTP Request
-    String inputLine;
-    // first line read with only the relative URL
-    String shortInputLine;
-    // used multiple times when parsing the first line
-    String[] tokens;
-    // the full URL for the destination address
-    String destFullURL;
-    // just the relative part of the destination URL
-    String destRelativeURL = "";
-    // just the hostname part of the destination URL
-    String destHostname;
-    // the port of the destination (default is 80)
-    int destPort;
+    String inputLine; // first line read from the HTTP Request
+    String shortInputLine; // first line read with only the relative URL
+    String[] tokens; // used multiple times when parsing the first line
+    String destFullURL; // the full URL for the destination address
+    String destRelativeURL = ""; // just the relative part of the destination URL
+    String destHostname; // just the hostname part of the destination URL
+    int destPort; // the port of the destination (default is 80)
 
     URL destURL;
-    InetAddress ip;
+    InetAddress destIp;
     URLConnection urlConn;
+
+    byte[] buffer = new byte[100];
+    int bytesRead;
 
     public ConnectionThread(Socket clientSocket) {
 
@@ -37,14 +34,33 @@ public class ConnectionThread extends Thread {
 
             // InputStreamReader takes the byte stream and converts it to a char stream
             // the BufferedReader makes the char stream readable
-            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            InputStream istream = socket.getInputStream();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(istream));
 
-            parseDestURL(reader.readLine());
-
-            while ((inputLine = reader.readLine()) != null) {
-                System.out.println(inputLine);
+            inputLine = reader.readLine();
+            // if the request begins with GET, or POST then the URL must be parsed
+            if (Pattern.matches("^(GET|POST)", inputLine)) {
+                parseDestURL(inputLine);
             }
 
+            while ((inputLine = reader.readLine()) != null && inputLine != "") {
+                inputLine = checkHeaders(inputLine);
+            }
+
+            /*TODO at this point I should go through all the headers of the HTTP request and make sure there is no 
+            Connection header, or Proxy-Connection, because if there is I need to change it.
+            Find a way to figure when the message body begins so I can stop reading in from istream with the
+            InputStreamReader*/
+
+            // the output stream for this request
+            OutputStream ostream = new Socket(destIp, destPort).getOutputStream();
+            ostream.write(shortInputLine.getBytes());
+
+            // until the input stream is finished the bytes are directly sent to the output stream "buffer" bytes at a time
+            do {
+                bytesRead = istream.read(buffer);
+                ostream.write(buffer);
+            } while (bytesRead != -1);
 
         } catch (Exception e) {
 
@@ -122,10 +138,27 @@ public class ConnectionThread extends Thread {
             } catch (MalformedURLException e) {
                 throw new MalformedURLException("Browser tried connecting to a nonexistent URL");
             }
-            ip = getDNSLookup(destHostname);
+            destIp = getDNSLookup(destHostname);
 
             shortInputLine = requestType + " " + destRelativeURL + " " + HTTPVersion;
         }
+    }
+
+    /**
+    *This method takes in a header line of an HTTP request and makes any necessary changes
+    *Changes made: set Connection and Proxy-connection to "close"
+    *@param line the input line that the method is currently checking
+    *@return returns the new string of any changes made to the line, and if no changes are made returns
+    *the original line
+    */
+    private static String checkHeaders(String line) {
+
+        // if the line begins with "Connection" or "Proxy-connection" make the property "close"
+        if (Pattern.matches("^(Connection:|Proxy-connection:)", line)) {
+            return line.split(":")[0] + "close";
+        }
+
+        return line;
     }
 
     /** 
