@@ -7,8 +7,9 @@ public class ConnectionThread extends Thread {
 
     private Socket socket;
     
-    private InputStream istream;
-    private BufferedReader reader;
+    private InputStream clientis;
+    private BufferedReader clientReader;
+    private InputStream serveris;
     private OutputStream clientos;
     private OutputStream serveros;
 
@@ -37,10 +38,10 @@ public class ConnectionThread extends Thread {
     public void run() {
 
         try {
-            istream = socket.getInputStream();
-            reader = new BufferedReader(new InputStreamReader(istream));
+            clientis= socket.getInputStream();
+            clientReader = new BufferedReader(new InputStreamReader(clientis));
 
-            if ((inputLine = reader.readLine()) != null && Pattern.matches("^HTTP", inputLine)) {
+            if ((inputLine = clientReader.readLine()) != null && Pattern.matches("^HTTP", inputLine)) {
                 handleResponse(inputLine);
             } else {
                 handleRequest(inputLine);
@@ -63,19 +64,20 @@ public class ConnectionThread extends Thread {
                 parseDestURL(inputLine);
             }
 
-            OutputStream ostream = new Socket(destIp, destPort).getOutputStream();
-            ostream.write(shortInputLine.getBytes());
+            // sets up a new socket to the servers ip and port on the local address on any free port
+            serveros = new Socket(destIp, destPort, null, 0).getOutputStream();
+            serveros.write(shortInputLine.getBytes());
 
             // Runs through all the Header lines
-            while ((inputLine = reader.readLine()) != null && inputLine != "") {
+            while ((inputLine = clientReader.readLine()) != null && inputLine != "") {
                 inputLine = checkHeaders(inputLine);
-                ostream.write(inputLine.getBytes());
+                serveros.write(inputLine.getBytes());
             }
 
             // Now all thats left is the message which can be passed to the OutputStream directly
             do {
-                bytesRead = istream.read(buffer);
-                ostream.write(buffer);
+                bytesRead = clientis.read(buffer);
+                serveros.write(buffer);
             } while (bytesRead != -1);
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the proxy-server outputstream" + 
@@ -91,7 +93,7 @@ public class ConnectionThread extends Thread {
     private void handleResponse(String HTTPRespFirstLine) {
 
         try {
-            OutputStream ostream = socket.getOutputStream();
+            clientos= socket.getOutputStream();
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the server-proxy inputstream" + 
                                " or proxy-client outputstream");
