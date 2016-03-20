@@ -5,22 +5,28 @@ import java.util.regex.Pattern;
 
 public class ConnectionThread extends Thread {
 
-    Socket socket;
+    private Socket socket;
+    
+    private InputStream istream;
+    private BufferedReader reader;
+    private OutputStream clientos;
+    private OutputStream serveros;
 
-    String inputLine; // first line read from the HTTP Request
-    String shortInputLine; // first line read with only the relative URL
-    String[] tokens; // used multiple times when parsing the first line
-    String destFullURL; // the full URL for the destination address
-    String destRelativeURL = ""; // just the relative part of the destination URL
-    String destHostname; // just the hostname part of the destination URL
-    int destPort; // the port of the destination (default is 80)
+    private String inputLine; // first line read from the HTTP Request
+    private String shortInputLine; // first line read with only the relative URL
+    private String[] tokens; // used multiple times when parsing the first line
+    private String destFullURL; // the full URL for the destination address
+    private String destRelativeURL = ""; // just the relative part of the destination URL
+    private String destHostname; // just the hostname part of the destination URL
+    private int destPort; // the port of the destination (default is 80)
 
-    URL destURL;
-    InetAddress destIp;
-    URLConnection urlConn;
+    private URL destURL;
+    private InetAddress destIp;
+    private URLConnection urlConn;
 
-    byte[] buffer = new byte[100];
-    int bytesRead;
+    private final int bufferSize = 100; // size of the input stream buffer in bytes
+    private byte[] buffer = new byte[bufferSize];
+    private int bytesRead;
 
     public ConnectionThread(Socket clientSocket) {
 
@@ -31,41 +37,66 @@ public class ConnectionThread extends Thread {
     public void run() {
 
         try {
+            istream = socket.getInputStream();
+            reader = new BufferedReader(new InputStreamReader(istream));
 
-            // InputStreamReader takes the byte stream and converts it to a char stream
-            // the BufferedReader makes the char stream readable
-            InputStream istream = socket.getInputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(istream));
+            if ((inputLine = reader.readLine()) != null && Pattern.matches("^HTTP", inputLine)) {
+                handleResponse(inputLine);
+            } else {
+                handleRequest(inputLine);
+            }
+        } catch (IOException e) {
+            System.out.println("An I/O Exception has occured creating the client-proxy inputstream or buffered reader");
+            System.exit(-1);
+        }
+    }
 
-            inputLine = reader.readLine();
+    /**
+    *Handles a request from the client to the server
+    *@param HTTPReqFirstLine the first line of the request
+    */
+    private void handleRequest(String HTTPReqFirstLine) throws UnknownHostException, MalformedURLException {
+
+        try {
             // if the request begins with GET, or POST then the URL must be parsed
             if (Pattern.matches("^(GET|POST)", inputLine)) {
                 parseDestURL(inputLine);
             }
 
-            while ((inputLine = reader.readLine()) != null && inputLine != "") {
-                inputLine = checkHeaders(inputLine);
-            }
-
-            /*TODO at this point I should go through all the headers of the HTTP request and make sure there is no 
-            Connection header, or Proxy-Connection, because if there is I need to change it.
-            Find a way to figure when the message body begins so I can stop reading in from istream with the
-            InputStreamReader*/
-
-            // the output stream for this request
             OutputStream ostream = new Socket(destIp, destPort).getOutputStream();
             ostream.write(shortInputLine.getBytes());
 
-            // until the input stream is finished the bytes are directly sent to the output stream "buffer" bytes at a time
+            // Runs through all the Header lines
+            while ((inputLine = reader.readLine()) != null && inputLine != "") {
+                inputLine = checkHeaders(inputLine);
+                ostream.write(inputLine.getBytes());
+            }
+
+            // Now all thats left is the message which can be passed to the OutputStream directly
             do {
                 bytesRead = istream.read(buffer);
                 ostream.write(buffer);
             } while (bytesRead != -1);
-
-        } catch (Exception e) {
-
+        } catch (IOException e) {
+            System.out.println("An I/O exception has occured while creating the proxy-server outputstream" + 
+                               " or while reading from client-proxy inputstream");
+            System.exit(-1);
         }
+    }
 
+    /**
+    *Handles a response from the server to the client
+    *@param HTTPRespFirstLine the first line of the response
+    */
+    private void handleResponse(String HTTPRespFirstLine) {
+
+        try {
+            OutputStream ostream = socket.getOutputStream();
+        } catch (IOException e) {
+            System.out.println("An I/O exception has occured while creating the server-proxy inputstream" + 
+                               " or proxy-client outputstream");
+            System.exit(-1);
+        }
     }
 
     /** 
@@ -75,73 +106,66 @@ public class ConnectionThread extends Thread {
     */
     private void parseDestURL(String HTTPReqFirstLine) throws UnknownHostException, MalformedURLException {
 
-        String requestType;
-        String HTTPVersion;
+        String requestType; // Either GET or POST
+        String HTTPVersion; // HTTP/1.1 most likely
 
-        // Reads the first line of the request and pulls out the URL
-        if (HTTPReqFirstLine != null) {
+        System.out.println(HTTPReqFirstLine);
 
-            System.out.println(HTTPReqFirstLine);
+        // pulls out the URL part of HTTP request first line
+        tokens = HTTPReqFirstLine.split("\\s+");
+        System.out.println(Arrays.deepToString(tokens));
+        requestType = tokens[0];
+        destFullURL = tokens[1];
+        HTTPVersion = tokens[2];
 
-            // pulls out the URL part of HTTP request
-            tokens = HTTPReqFirstLine.split("\\s+");
-            System.out.println(Arrays.deepToString(tokens));
-            requestType = tokens[0];
-            destFullURL = tokens[1];
-            HTTPVersion = tokens[2];
+        // splits up the URL and port which has the format URL:port
+        tokens = destFullURL.split(":");
+        System.out.println(Arrays.deepToString(tokens));
 
-            // splits up the URL and port which has the format URL:port
-            tokens = destFullURL.split(":");
-            System.out.println(Arrays.deepToString(tokens));
+        // get the last element of the split which will be the port
+        try {
+            destPort = (int)Integer.valueOf(tokens[tokens.length - 1]);
 
-            // get the last element of the split which will be the port
-            try {
-                destPort = (int)Integer.valueOf(tokens[tokens.length - 1]);
-
-                // if the Integer.valueOf part throws an exception then that means there is no port and this part will
-                // be skipped
-
-                // get cut off the port part of the URL
-                destFullURL = destFullURL.substring(0, destFullURL.lastIndexOf(tokens[tokens.length -1]) - 1);
-            // if there is no port specified, and tokens[tokens.length -1] isn't a number, use port 80
-            } catch (Exception e) {
-                destPort = 80;
-            }
-
-            // splits the URL into the hostname and the rest of the url
-            // URL will have the format hostname/restofurl
-            tokens = destFullURL.split("/");
-
-            System.out.println(Arrays.deepToString(tokens));
-
-            // if the http: part isn't included in the URL
-            if (!tokens[0].equals("http:")) {
-                destHostname = tokens[0];
-
-                // if there is more info after the hostname
-                if (tokens.length > 1) {
-                    destRelativeURL = destFullURL.substring(tokens[0].length() -1);
-                }
-            // otherwise the hostname is the second part
-            } else {
-                destHostname = tokens[1];
-
-                // if there is more info after the hostname
-                if (tokens.length > 2) {
-                    destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[1].length() -1);
-                }
-            }
-
-            // this includes the port number
-            try {
-                destURL = new URL(destFullURL);
-            } catch (MalformedURLException e) {
-                throw new MalformedURLException("Browser tried connecting to a nonexistent URL");
-            }
-            destIp = getDNSLookup(destHostname);
-
-            shortInputLine = requestType + " " + destRelativeURL + " " + HTTPVersion;
+            // cut off the port part of the URL
+            destFullURL = destFullURL.substring(0, destFullURL.lastIndexOf(tokens[tokens.length -1]) - 1);
+        // if there is no port specified, and tokens[tokens.length -1] isn't a number, use port 80
+        } catch (Exception e) {
+            destPort = 80;
         }
+
+        // splits the URL into the hostname and the rest of the url
+        // URL will have the format hostname/restofurl
+        tokens = destFullURL.split("/");
+
+        System.out.println(Arrays.deepToString(tokens));
+
+        // if the http: part isn't included in the URL hostname is the first element
+        if (!tokens[0].equals("http:")) {
+            destHostname = tokens[0];
+
+            // if there is more info after the hostname
+            if (tokens.length > 1) {
+                destRelativeURL = destFullURL.substring(tokens[0].length() -1);
+            }
+        // otherwise the hostname is the second part
+        } else {
+            destHostname = tokens[1];
+
+            // if there is more info after the hostname
+            if (tokens.length > 2) {
+                destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[1].length() -1);
+            }
+        }
+
+        try {
+            destURL = new URL(destFullURL);
+        } catch (MalformedURLException e) {
+            throw new MalformedURLException("Browser tried connecting to an incorrectly formatted URL");
+        }
+        destIp = getDNSLookup(destHostname);
+
+        // the first line the proxy will send to the server
+        shortInputLine = requestType + " " + destRelativeURL + " " + HTTPVersion;
     }
 
     /**
@@ -170,7 +194,7 @@ public class ConnectionThread extends Thread {
 
         InetAddress ipAddress;
 
-         // do a DNS lookup of the hostname
+        // do a DNS lookup of the hostname
         try {
             ipAddress = InetAddress.getByName(hostname);
         } catch (UnknownHostException e) {
@@ -179,5 +203,4 @@ public class ConnectionThread extends Thread {
 
         return ipAddress;
     }
-
 }
