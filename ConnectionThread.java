@@ -5,13 +5,14 @@ import java.util.regex.Pattern;
 
 public class ConnectionThread extends Thread {
 
-    private Socket socket;
+    private Socket clientSocket; // socket for client proxy communication
+    private Socket serverSocket; // socket for proxy server communication
     
-    private InputStream clientis;
-    private BufferedReader clientReader;
-    private InputStream serveris;
-    private OutputStream clientos;
-    private OutputStream serveros;
+    private InputStream clientis; // client -> proxy 
+    private BufferedReader clientReader; // client -> proxy (char[])
+    private InputStream serveris; // proxy -> server
+    private OutputStream clientos; // proxy -> client
+    private OutputStream serveros; // server -> proxy
 
     private String inputLine; // first line read from the HTTP Request
     private String shortInputLine; // first line read with only the relative URL
@@ -25,27 +26,32 @@ public class ConnectionThread extends Thread {
     private InetAddress destIp;
     private URLConnection urlConn;
 
-    private final int bufferSize = 100; // size of the input stream buffer in bytes
+    private final int bufferSize = 8000; // size of the input stream buffer in bytes
     private byte[] buffer = new byte[bufferSize];
     private int bytesRead;
 
-    public ConnectionThread(Socket clientSocket) {
+    private boolean containsMsg = false;
+
+    public ConnectionThread(Socket socket) {
 
         super();
-        socket = clientSocket;
+        clientSocket = socket;
     }
 
     public void run() {
 
         try {
-            clientis= socket.getInputStream();
+            clientis = clientSocket.getInputStream();
+            clientos = clientSocket.getOutputStream();
             clientReader = new BufferedReader(new InputStreamReader(clientis));
 
-            if ((inputLine = clientReader.readLine()) != null && Pattern.matches("^HTTP", inputLine)) {
-                handleResponse(inputLine);
-            } else {
-                handleRequest(inputLine);
-            }
+            handleRequest(clientReader.readLine());
+
+            handleResponse();
+
+            clientSocket.close();
+            serverSocket.close();
+
         } catch (IOException e) {
             System.out.println("An I/O Exception has occured creating the client-proxy inputstream or buffered reader");
             System.exit(-1);
@@ -60,25 +66,45 @@ public class ConnectionThread extends Thread {
 
         try {
             // if the request begins with GET, or POST then the URL must be parsed
-            if (Pattern.matches("^(GET|POST)", inputLine)) {
-                parseDestURL(inputLine);
+            System.out.println(HTTPReqFirstLine);
+            if (Pattern.matches("^(GET|POST).*", HTTPReqFirstLine)) {
+                System.out.println("GET POST pattern match");
+                parseDestURL(HTTPReqFirstLine);
             }
 
             // sets up a new socket to the servers ip and port on the local address on any free port
-            serveros = new Socket(destIp, destPort, null, 0).getOutputStream();
+            System.out.println(destIp);
+            System.out.println(destPort);
+            serverSocket = new Socket(destIp, destPort);
+            System.out.println("Server Socket created");
+            serveros = serverSocket.getOutputStream();
+            System.out.println("Server Socket output stream created");
             serveros.write(shortInputLine.getBytes());
 
             // Runs through all the Header lines
-            while ((inputLine = clientReader.readLine()) != null && inputLine != "") {
+            do {
+                inputLine = clientReader.readLine();
                 inputLine = checkHeaders(inputLine);
+                System.out.println("Writing: " + inputLine + " to the server");
                 serveros.write(inputLine.getBytes());
-            }
+            } while (inputLine != null && !inputLine.equals(""));
+
+            System.out.println("the headers have finished writing to the server");
+
+            /* TODO so what I need to do is check to see if there is a message body, if there is then I need to 
+            figure its length and when I've reached that length, then I as the proxy need to close the connection
+            since the browser wants to use persistent connections*/
 
             // Now all thats left is the message which can be passed to the OutputStream directly
-            do {
-                bytesRead = clientis.read(buffer);
-                serveros.write(buffer);
-            } while (bytesRead != -1);
+            while ((bytesRead = clientis.read(buffer, 0, bufferSize)) > 0) {
+                System.out.println("bytes read from client message body");
+                serveros.write(buffer, 0, bytesRead);
+                System.out.println("bytes sent to server");
+
+                buffer = new byte[bufferSize]; //clears the buffer so that no duplicate data is sent
+            }
+
+            System.out.println("The client request has finished being sent to the server");
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the proxy-server outputstream" + 
                                " or while reading from client-proxy inputstream");
@@ -90,10 +116,15 @@ public class ConnectionThread extends Thread {
     *Handles a response from the server to the client
     *@param HTTPRespFirstLine the first line of the response
     */
-    private void handleResponse(String HTTPRespFirstLine) {
+    private void handleResponse() {
 
         try {
-            clientos= socket.getOutputStream();
+            // immediately sends server's response to the client with no modification
+            System.out.println("Now reading server response");
+            do {
+                bytesRead = serveris.read(buffer);
+                clientos.write(buffer);
+            } while (bytesRead != -1);
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the server-proxy inputstream" + 
                                " or proxy-client outputstream");
@@ -151,11 +182,11 @@ public class ConnectionThread extends Thread {
             }
         // otherwise the hostname is the second part
         } else {
-            destHostname = tokens[1];
+            destHostname = tokens[2];
 
             // if there is more info after the hostname
             if (tokens.length > 2) {
-                destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[1].length() -1);
+                destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[2].length() -1);
             }
         }
 
@@ -180,8 +211,8 @@ public class ConnectionThread extends Thread {
     private static String checkHeaders(String line) {
 
         // if the line begins with "Connection" or "Proxy-connection" make the property "close"
-        if (Pattern.matches("^(Connection:|Proxy-connection:)", line)) {
-            return line.split(":")[0] + "close";
+        if (Pattern.matches("^(Connection:|Proxy-connection:).*", line)) {
+            return line.split(":")[0] + ": close";
         }
 
         return line;
