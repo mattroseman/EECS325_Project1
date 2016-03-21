@@ -90,7 +90,7 @@ public class ConnectionThread extends Thread {
             serveris = serverSocket.getInputStream();
             System.out.println("Server Socket input stream created");
             System.out.println("Writing: " + shortInputLine + " to the server");
-            serveros.write(shortInputLine.getBytes());
+            serveros.write(shortInputLine.getBytes("ASCII"));
 
             // Runs through all the Header lines
             while ((inputLine = clientReader.readLine()) != null && !inputLine.equals("")) {
@@ -145,7 +145,8 @@ public class ConnectionThread extends Thread {
             // immediately sends server's response to the client with no modification
             System.out.println("Now reading server response");
 
-            while ((bytesRead = serveris.read(buffer, 0, bufferSize)) > 0) {
+            while ((bytesRead = serveris.read(buffer, 0, bufferSize)) != -1) {
+                System.out.println(bytesRead + " bytes where read from the server and written to client");
                 clientos.write(buffer, 0, bytesRead);
             }
 
