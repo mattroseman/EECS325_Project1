@@ -13,6 +13,7 @@ public class ConnectionThread extends Thread {
     private InputStream serveris; // proxy -> server
     private OutputStream clientos; // proxy -> client
     private OutputStream serveros; // server -> proxy
+    private OutputStreamWriter serverWriter;
 
     private String inputLine; // first line read from the HTTP Request
     private String shortInputLine; // first line read with only the relative URL
@@ -49,7 +50,11 @@ public class ConnectionThread extends Thread {
 
             handleRequest(clientReader.readLine());
 
+            System.out.println("HTTP request has finished being sent");
+
             handleResponse();
+
+            System.out.println("HTTP response has finished being sent");
 
             clientSocket.close();
             serverSocket.close();
@@ -81,17 +86,18 @@ public class ConnectionThread extends Thread {
             System.out.println("Server Socket created");
             serveros = serverSocket.getOutputStream();
             System.out.println("Server Socket output stream created");
+            serverWriter = new OutputStreamWriter(serveros);
             serveris = serverSocket.getInputStream();
             System.out.println("Server Socket input stream created");
+            System.out.println("Writing: " + shortInputLine + " to the server");
             serveros.write(shortInputLine.getBytes());
 
             // Runs through all the Header lines
-            do {
-                inputLine = clientReader.readLine();
+            while ((inputLine = clientReader.readLine()) != null && !inputLine.equals("")) {
                 inputLine = checkHeaders(inputLine);
                 System.out.println("Writing: " + inputLine + " to the server");
-                serveros.write(inputLine.getBytes());
-            } while (inputLine != null && !inputLine.equals(""));
+                serverWriter.write(inputLine, 0, inputLine.length());
+            }
 
             System.out.println("the headers have finished writing to the server");
 
@@ -122,9 +128,9 @@ public class ConnectionThread extends Thread {
         while (msgSize > 0) {
             bytesRead = clientis.read(buffer, 0, bufferSize);
             if (bytesRead > 0) {
+                System.out.println("writing " + bytesRead + " bytes to the server");
                 serveros.write(buffer, 0, bytesRead);
             }
-            buffer = new byte[bufferSize];
             msgSize = msgSize - bytesRead;
         }
     }
@@ -138,10 +144,10 @@ public class ConnectionThread extends Thread {
         try {
             // immediately sends server's response to the client with no modification
             System.out.println("Now reading server response");
-            do {
-                bytesRead = serveris.read(buffer);
-                clientos.write(buffer);
-            } while (bytesRead > 0);
+
+            while ((bytesRead = serveris.read(buffer, 0, bufferSize)) > 0) {
+                clientos.write(buffer, 0, bytesRead);
+            }
 
             clientos.flush();
         } catch (IOException e) {
@@ -197,7 +203,7 @@ public class ConnectionThread extends Thread {
 
             // if there is more info after the hostname
             if (tokens.length > 1) {
-                destRelativeURL = destFullURL.substring(tokens[0].length() -1);
+                destRelativeURL = destFullURL.substring(tokens[0].length());
             }
         // otherwise the hostname is the second part
         } else {
@@ -205,7 +211,7 @@ public class ConnectionThread extends Thread {
 
             // if there is more info after the hostname
             if (tokens.length > 2) {
-                destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[2].length() -1);
+                destRelativeURL = destFullURL.substring(tokens[0].length() + 2 + tokens[2].length());
             }
         }
 
