@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.util.Arrays;
 import java.util.regex.Pattern;
+import java.nio.charset.StandardCharsets;
 
 public class ConnectionThread extends Thread {
 
@@ -13,7 +14,6 @@ public class ConnectionThread extends Thread {
     private InputStream serveris; // proxy -> server
     private OutputStream clientos; // proxy -> client
     private OutputStream serveros; // server -> proxy
-    private OutputStreamWriter serverWriter;
 
     private String inputLine; // first line read from the HTTP Request
     private String shortInputLine; // first line read with only the relative URL
@@ -30,6 +30,7 @@ public class ConnectionThread extends Thread {
     private final int bufferSize = 8000; // size of the input stream buffer in bytes
     private byte[] buffer = new byte[bufferSize];
     private int bytesRead;
+    private byte[] tempBytes;
 
     private boolean contentLengthUsed = false;
     private boolean transferEncodingUsed = false;
@@ -61,6 +62,7 @@ public class ConnectionThread extends Thread {
 
         } catch (IOException e) {
             System.out.println("An I/O Exception has occured creating the client-proxy inputstream or buffered reader");
+            System.out.println(e);
             System.exit(-1);
         }
     }
@@ -86,18 +88,23 @@ public class ConnectionThread extends Thread {
             System.out.println("Server Socket created");
             serveros = serverSocket.getOutputStream();
             System.out.println("Server Socket output stream created");
-            serverWriter = new OutputStreamWriter(serveros);
             serveris = serverSocket.getInputStream();
             System.out.println("Server Socket input stream created");
             System.out.println("Writing: " + shortInputLine + " to the server");
-            serveros.write(shortInputLine.getBytes("ASCII"));
+            shortInputLine = shortInputLine.concat("\r\n");
+            tempBytes = shortInputLine.getBytes(StandardCharsets.US_ASCII);
+            serveros.write(tempBytes, 0, tempBytes.length);
 
             // Runs through all the Header lines
             while ((inputLine = clientReader.readLine()) != null && !inputLine.equals("")) {
                 inputLine = checkHeaders(inputLine);
                 System.out.println("Writing: " + inputLine + " to the server");
-                serverWriter.write(inputLine, 0, inputLine.length());
+                inputLine = inputLine.concat("\r\n");
+                tempBytes = inputLine.getBytes(StandardCharsets.US_ASCII);
+                serveros.write(tempBytes, 0, tempBytes.length);
             }
+
+            serveros.write("\r\n".getBytes(StandardCharsets.US_ASCII), 0, "\r\n".length());
 
             System.out.println("the headers have finished writing to the server");
 
@@ -116,6 +123,7 @@ public class ConnectionThread extends Thread {
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the proxy-server outputstream" + 
                                " or while reading from client-proxy inputstream");
+            System.out.println(e);
             System.exit(-1);
         }
     }
@@ -154,6 +162,7 @@ public class ConnectionThread extends Thread {
         } catch (IOException e) {
             System.out.println("An I/O exception has occured while creating the server-proxy inputstream" + 
                                " or proxy-client outputstream");
+            System.out.println(e);
             System.exit(-1);
         }
     }
@@ -219,7 +228,8 @@ public class ConnectionThread extends Thread {
         try {
             destURL = new URL(destFullURL);
         } catch (MalformedURLException e) {
-            throw new MalformedURLException("Browser tried connecting to an incorrectly formatted URL");
+            System.out.println("Browser tried connecting to an incorrectly formatted URL");
+            System.out.println(e);
         }
         destIp = getDNSLookup(destHostname);
 
@@ -261,13 +271,14 @@ public class ConnectionThread extends Thread {
     */
     private static InetAddress getDNSLookup(String hostname) throws UnknownHostException {
 
-        InetAddress ipAddress;
+        InetAddress ipAddress = null;
 
         // do a DNS lookup of the hostname
         try {
             ipAddress = InetAddress.getByName(hostname);
         } catch (UnknownHostException e) {
-            throw new UnknownHostException("the browser tried to connect to an unknown host");
+            System.out.println("the browser tried to connect to an unknown host");
+            System.out.println(e);
         }       
 
         return ipAddress;
