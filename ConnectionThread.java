@@ -49,16 +49,23 @@ public class ConnectionThread extends Thread {
             clientos = clientSocket.getOutputStream();
             clientReader = new BufferedReader(new InputStreamReader(clientis));
 
-            handleRequest(clientReader.readLine());
+            if ((inputLine = clientReader.readLine()) != null) {
+                handleRequest(inputLine);
 
-            System.out.println("HTTP request has finished being sent");
 
-            handleResponse();
+                System.out.println("HTTP request has finished being sent");
 
-            System.out.println("HTTP response has finished being sent");
+                handleResponse();
+
+                System.out.println("HTTP response has finished being sent");
+
+                serverSocket.close();
+
+            } else {
+                System.out.println("Client started a connection but didn't send anything");
+            }
 
             clientSocket.close();
-            serverSocket.close();
 
         } catch (IOException e) {
             System.out.println("An I/O Exception has occured creating the client-proxy inputstream or buffered reader");

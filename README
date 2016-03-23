@@ -1,0 +1,16 @@
+Matthew Roseman
+mrr77
+EECS 325 Project 1
+
+port: 5026
+instructions: there are two java classes to compile, proxyd.java and ConnectionThread.java. So to compile call either
+"javac *.java" or "javac proxyd.java ConnectionThread.java"
+then to run the program just call 
+"java proxyd -port 5026"
+browser: I used firefox for this project. I set it up so firefox would use the proxy for normal HTTP protocol, not FTP,
+SSL or any other protocols.
+sites: some sites used where
+case.edu
+teamliquid.net
+google.com
+twitch.tv (this site caused problems because firefox kept sending CONNECT requests through the proxy)
