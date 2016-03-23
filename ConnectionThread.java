@@ -63,6 +63,9 @@ public class ConnectionThread extends Thread {
 
             } else {
                 System.out.println("Client started a connection but didn't send anything");
+                while ((inputLine = clientReader.readLine()) != null) {
+                    System.out.println(inputLine);
+                }
             }
 
             clientSocket.close();
