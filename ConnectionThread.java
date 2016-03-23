@@ -49,7 +49,8 @@ public class ConnectionThread extends Thread {
             clientos = clientSocket.getOutputStream();
             clientReader = new BufferedReader(new InputStreamReader(clientis));
 
-            if ((inputLine = clientReader.readLine()) != null) {
+            if ((inputLine = clientReader.readLine()) != null &&
+                Pattern.matches("^(GET|POST).*", inputLine)) {
                 handleRequest(inputLine);
 
 
@@ -62,7 +63,8 @@ public class ConnectionThread extends Thread {
                 serverSocket.close();
 
             } else {
-                System.out.println("Client started a connection but didn't send anything");
+                System.out.println("Client started a connection but didn't send anything or " +
+                        "the request was not a GET or a POST");
                 while ((inputLine = clientReader.readLine()) != null) {
                     System.out.println(inputLine);
                 }
@@ -86,10 +88,7 @@ public class ConnectionThread extends Thread {
         try {
             // if the request begins with GET, or POST then the URL must be parsed
             System.out.println(HTTPReqFirstLine);
-            if (Pattern.matches("^(GET|POST).*", HTTPReqFirstLine)) {
-                System.out.println("GET POST pattern match");
-                parseDestURL(HTTPReqFirstLine);
-            }
+            parseDestURL(HTTPReqFirstLine);
 
             // sets up a new socket to the servers ip and port on the local address on any free port
             System.out.println(destIp);
